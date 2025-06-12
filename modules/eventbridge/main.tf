@@ -1,32 +1,16 @@
-resource "aws_eventbridge_pipe" "this" {
-  name     = var.pipe_name
-  role_arn = aws_iam_role.pipe_role.arn
+resource "aws_cloudformation_stack" "pipe" {
+  name          = var.pipe_name
+  template_body = file("${path.module}/pipe.yaml")
+  capabilities  = ["CAPABILITY_NAMED_IAM"]
 
-  source = var.dynamodb_stream_arn
-  source_parameters {
-    dynamodb_stream_parameters {
-      starting_position = "LATEST"
-    }
-  }
-
-  target = var.sqs_queue_arn
-  target_parameters {
-    sqs_queue_parameters {}
-  }
-
-  filter_criteria {
-    filter {
-      pattern = jsonencode({
-        "dynamodb" : {
-          "NewImage" : {
-            "status" : { "S" : ["PENDING"] }
-          }
-        }
-      })
-    }
+  parameters = {
+    PipeName          = var.pipe_name
+    PipeRoleArn       = aws_iam_role.pipe_role.arn
+    DynamoDBStreamArn = var.dynamodb_stream_arn
+    SQSQueueArn       = var.sqs_queue_arn
   }
 }
 
 output "pipe_arn" {
-  value = aws_eventbridge_pipe.this.arn
+  value = aws_cloudformation_stack.pipe.outputs["PipeArn"]
 }

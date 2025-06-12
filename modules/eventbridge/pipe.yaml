@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  PipeName:
+    Type: String
+  PipeRoleArn:
+    Type: String
+  DynamoDBStreamArn:
+    Type: String
+  SQSQueueArn:
+    Type: String
+Resources:
+  EventBridgePipe:
+    Type: AWS::Pipes::Pipe
+    Properties:
+      Name: !Ref PipeName
+      RoleArn: !Ref PipeRoleArn
+      Source: !Ref DynamoDBStreamArn
+      SourceParameters:
+        DynamoDBStreamParameters:
+          StartingPosition: LATEST
+      Target: !Ref SQSQueueArn
+      TargetParameters:
+        SqsQueueParameters: {}
+      FilterCriteria:
+        Filters:
+          - Pattern: |
+              {
+                "dynamodb": {
+                  "NewImage": {
+                    "status": { "S": ["PENDING"] }
+                  }
+                }
+              }
+Outputs:
+  PipeArn:
+    Value: !GetAtt EventBridgePipe.Arn

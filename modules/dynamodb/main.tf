@@ -15,6 +15,12 @@ resource "aws_dynamodb_table" "this" {
 
   stream_enabled   = true
   stream_view_type = "NEW_IMAGE"
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
 }
 
 output "table_name" {
