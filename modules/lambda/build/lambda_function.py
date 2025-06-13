@@ -43,40 +43,17 @@ def lambda_handler(event, context):
         print("EC2 already running. Exiting.")
         return {"status": "ec2_running"}
 
-    # Pass the sqs object to EC2 via user data
-    user_data = f"""#!/bin/bash
-exec > /home/ubuntu/user-data.log 2>&1
-set -x
-cd /home/ubuntu
+    # Read and substitute the shell script template
+    with open("/var/task/ec2_bootstrap.sh", "r", encoding="utf-8") as f:
+        script_template = f.read()
 
-# Install AWS CLI v2
-apt-get update
-apt-get install -y unzip curl jq
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-./aws/install
-export PATH=$PATH:/usr/local/bin
-
-echo '{message_json}' > /home/ubuntu/sqs_message.json
-echo "Message: {message_json}"
-
-# Extract the row ID from the SQS message
-ROW_ID=$(jq -r '.Body | fromjson | .dynamodb.Keys.id.S' /home/ubuntu/sqs_message.json)
-echo "Extracted row ID: $ROW_ID"
-
-# Now you can use $ROW_ID in your DynamoDB update
-aws dynamodb update-item \
-    --table-name {dynamodb_table_name} \
-    --key "{{\\"id\\":{{\\"S\\":\\"$ROW_ID\\"}}}}" \
-    --update-expression 'SET #s = :s' \
-    --expression-attribute-names '{{"#s":"status"}}' \\
-    --expression-attribute-values '{{":s":{{"S":"FINISHED"}}}}'
-echo "DynamoDB update completed"
-
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-aws s3 cp /home/ubuntu/user-data.log s3://{s3_bucket_name}/$TIMESTAMP/run.log
-shutdown -h +{auto_terminate}
-"""
+    user_data = (
+        script_template
+        .replace("${MESSAGE_JSON}", message_json)
+        .replace("${DYNAMODB_TABLE_NAME}", dynamodb_table_name)
+        .replace("${S3_BUCKET_NAME}", s3_bucket_name)
+        .replace("${AUTO_TERMINATE}", str(auto_terminate))
+    )
 
     resp = ec2.run_instances(
         ImageId=ami_id,
