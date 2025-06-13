@@ -27,6 +27,7 @@ resource "aws_lambda_function" "rag_launcher" {
       S3_BUCKET_NAME            = var.s3_bucket_name
     }
   }
+  depends_on = [aws_cloudwatch_log_group.lambda_log_group]
 }
 
 output "lambda_function_name" {
