@@ -30,13 +30,13 @@ module "lambda" {
   source                    = "./modules/lambda"
   sqs_queue_arn             = module.sqs.queue_arn
   sqs_queue_url             = module.sqs.queue_url
+  dynamodb_table_name       = module.dynamodb.table_name
+  s3_bucket_name            = module.s3.bucket_name
   ec2_ami_id                = module.ec2.ec2_ami_id
   ec2_instance_type         = var.worker_instance_type
   ec2_autoterminate_minutes = var.worker_autoterminate_minutes
   ec2_subnet_id             = module.vpc.subnet_id
   ec2_security_group_id     = module.vpc.security_group_id
-  dynamodb_table_name       = module.dynamodb.table_name
-  s3_bucket_name            = module.s3.bucket_name
 }
 
 module "eventbridge_lambda" {
