@@ -21,10 +21,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Effect = "Allow",
         Action = [
-          "sqs:GetQueueAttributes",
           "sqs:ReceiveMessage",
-          "sqs:GetQueueUrl",
-          "sqs:DeleteMessage"
+          "sqs:GetQueueUrl"
         ],
         Resource = var.sqs_queue_arn
       },

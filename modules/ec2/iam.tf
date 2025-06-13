@@ -22,9 +22,24 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Resource = var.dynamodb_table_arn
       },
       {
-        Effect   = "Allow",
-        Action   = ["s3:PutObject"],
-        Resource = "arn:aws:s3:::${var.s3_bucket_name}/*"
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ],
+        Resource = [
+          "arn:aws:s3:::${var.s3_bucket_name}/*",
+          "arn:aws:s3:::${var.s3_bucket_name}"
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueUrl"
+        ],
+        Resource = var.sqs_queue_arn
       }
     ]
   })

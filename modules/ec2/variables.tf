@@ -12,3 +12,8 @@ variable "s3_bucket_name" {
   description = "S3 bucket name for log uploads."
   type        = string
 }
+
+variable "sqs_queue_arn" {
+  description = "ARN of the SQS queue."
+  type        = string
+}

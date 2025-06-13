@@ -22,6 +22,7 @@ module "ec2" {
   project_name       = var.project_name
   dynamodb_table_arn = module.dynamodb.table_arn
   s3_bucket_name     = module.s3.bucket_name
+  sqs_queue_arn      = module.sqs.queue_arn
 }
 
 module "s3" {

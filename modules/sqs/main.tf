@@ -1,5 +1,5 @@
 resource "aws_sqs_queue" "this" {
-  name = var.queue_name
+  name = var.sqs_queue_name
 }
 
 output "queue_url" {

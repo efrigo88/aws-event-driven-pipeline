@@ -1,13 +1,12 @@
 import os
 import boto3
-import json
 
 
 def lambda_handler(event, context):
+    """Check for running EC2 instances and launch a new one if needed."""
     sqs = boto3.client("sqs")
     ec2 = boto3.client("ec2")
     queue_url = os.environ["SQS_QUEUE_URL"]
-    dynamodb_table_name = os.environ["DYNAMODB_TABLE_NAME"]
     tag_key = os.environ["EC2_TAG_KEY"]
     tag_value = os.environ["EC2_TAG_VALUE"]
     ami_id = os.environ["EC2_AMI_ID"]
@@ -19,18 +18,16 @@ def lambda_handler(event, context):
     key_name = os.environ["EC2_KEY_NAME"]
     instance_profile_name = os.environ["EC2_INSTANCE_PROFILE_NAME"]
 
-    # Receive one message from SQS
+    # Check for messages in SQS
     messages = sqs.receive_message(
-        QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=0
+        QueueUrl=queue_url,
+        MaxNumberOfMessages=1,
+        WaitTimeSeconds=0
     ).get("Messages", [])
 
     if not messages:
         print("No messages in SQS. Exiting.")
         return {"status": "no_messages"}
-
-    message = messages[0]
-    message_json = json.dumps(message)
-    receipt_handle = message["ReceiptHandle"]
 
     # Check for running EC2 with the tag
     filters = [
@@ -49,10 +46,10 @@ def lambda_handler(event, context):
 
     user_data = (
         script_template
-        .replace("${MESSAGE_JSON}", message_json)
-        .replace("${DYNAMODB_TABLE_NAME}", dynamodb_table_name)
         .replace("${S3_BUCKET_NAME}", s3_bucket_name)
         .replace("${AUTO_TERMINATE}", str(auto_terminate))
+        .replace("${SQS_QUEUE_URL}", os.environ["SQS_QUEUE_URL"])
+        .replace("${DYNAMODB_TABLE_NAME}", os.environ["DYNAMODB_TABLE_NAME"])
     )
 
     resp = ec2.run_instances(
@@ -74,12 +71,9 @@ def lambda_handler(event, context):
             }
         ],
         UserData=user_data,
+        InstanceInitiatedShutdownBehavior="terminate",
     )
     print("Launched EC2:", resp["Instances"][0]["InstanceId"])
-
-    # Delete the SQS message after EC2 is successfully launched
-    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-    print("Deleted SQS message with receipt handle:", receipt_handle)
 
     return {
         "status": "ec2_launched",

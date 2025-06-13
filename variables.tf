@@ -25,5 +25,5 @@ variable "worker_instance_type" {
 variable "worker_autoterminate_minutes" {
   description = "Minutes after which worker EC2 should auto-terminate."
   type        = number
-  default     = 5
+  default     = 3
 }

@@ -5,26 +5,24 @@ cd /home/ubuntu
 
 # Install AWS CLI v2 and jq
 apt-get update
-apt-get install -y unzip curl jq
+apt-get install -y unzip curl jq python3-pip
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 ./aws/install
 export PATH=$PATH:/usr/local/bin
 
-echo '${MESSAGE_JSON}' > /home/ubuntu/sqs_message.json
-echo "Message: ${MESSAGE_JSON}"
+# Install boto3
+pip3 install boto3
 
-ROW_ID=$(jq -r '.Body | fromjson | .dynamodb.Keys.id.S' /home/ubuntu/sqs_message.json)
-echo "Extracted row ID: $ROW_ID"
+# Download the SQS worker script from S3
+aws s3 cp s3://${S3_BUCKET_NAME}/sqs_worker.py /home/ubuntu/sqs_worker.py
+chmod +x /home/ubuntu/sqs_worker.py
 
-aws dynamodb update-item \
-    --table-name ${DYNAMODB_TABLE_NAME} \
-    --key "{\"id\":{\"S\":\"$ROW_ID\"}}" \
-    --update-expression 'SET #s = :s' \
-    --expression-attribute-names '{"#s":"status"}' \
-    --expression-attribute-values '{":s":{"S":"FINISHED"}}'
-echo "DynamoDB update completed"
+# Set environment variables for the worker
+export SQS_QUEUE_URL="${SQS_QUEUE_URL}"
+export DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME}"
+export EC2_AUTOTERMINATE_MINUTES="${AUTO_TERMINATE}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
 
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-aws s3 cp /home/ubuntu/user-data.log s3://${S3_BUCKET_NAME}/$TIMESTAMP/run.log
-shutdown -h +${AUTO_TERMINATE}
+# Run the worker
+python3 /home/ubuntu/sqs_worker.py
