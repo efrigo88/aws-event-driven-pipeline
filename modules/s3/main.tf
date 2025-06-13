@@ -1,5 +1,5 @@
 locals {
-  bucket_name = "${var.project_name}-pipeline-logs-fhslxnfjksns"
+  bucket_name = "mutt-data-${var.project_name}-pipeline-logs-fhslxnfjksns"
 }
 
 resource "aws_s3_bucket" "logs" {

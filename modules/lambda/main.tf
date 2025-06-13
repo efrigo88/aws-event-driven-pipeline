@@ -15,7 +15,6 @@ resource "aws_lambda_function" "rag_launcher" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   environment {
     variables = {
-      AWS_DEFAULT_REGION        = var.aws_region
       SQS_QUEUE_URL             = var.sqs_queue_url
       DYNAMODB_TABLE_NAME       = var.dynamodb_table_name
       EC2_TAG_KEY               = "Role"
@@ -26,6 +25,8 @@ resource "aws_lambda_function" "rag_launcher" {
       EC2_SUBNET_ID             = var.ec2_subnet_id
       EC2_SECURITY_GROUP_ID     = var.ec2_security_group_id
       S3_BUCKET_NAME            = var.s3_bucket_name
+      EC2_KEY_NAME              = var.ec2_key_name
+      EC2_INSTANCE_PROFILE_NAME = var.ec2_instance_profile_name
     }
   }
   depends_on = [aws_cloudwatch_log_group.lambda_log_group]

@@ -10,6 +10,8 @@ resource "aws_iam_role" "lambda_exec" {
   })
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "rag-launcher-lambda-policy"
   role = aws_iam_role.lambda_exec.id
@@ -39,6 +41,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect   = "Allow",
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
         Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect   = "Allow",
+        Action   = ["iam:PassRole"],
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-ec2-role"
       }
     ]
   })

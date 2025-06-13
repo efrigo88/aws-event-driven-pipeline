@@ -18,7 +18,10 @@ module "eventbridge" {
 }
 
 module "ec2" {
-  source = "./modules/ec2"
+  source             = "./modules/ec2"
+  project_name       = var.project_name
+  dynamodb_table_arn = module.dynamodb.table_arn
+  s3_bucket_name     = module.s3.bucket_name
 }
 
 module "s3" {
@@ -28,7 +31,6 @@ module "s3" {
 
 module "lambda" {
   source                    = "./modules/lambda"
-  aws_region                = var.aws_region
   sqs_queue_arn             = module.sqs.queue_arn
   sqs_queue_url             = module.sqs.queue_url
   dynamodb_table_name       = module.dynamodb.table_name
@@ -38,6 +40,9 @@ module "lambda" {
   ec2_autoterminate_minutes = var.worker_autoterminate_minutes
   ec2_subnet_id             = module.vpc.subnet_id
   ec2_security_group_id     = module.vpc.security_group_id
+  ec2_key_name              = module.ec2.ec2_key_name
+  ec2_instance_profile_name = module.ec2.ec2_instance_profile_name
+  project_name              = var.project_name
 }
 
 module "eventbridge_lambda" {

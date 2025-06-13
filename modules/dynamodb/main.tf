@@ -30,3 +30,7 @@ output "table_name" {
 output "stream_arn" {
   value = aws_dynamodb_table.this.stream_arn
 }
+
+output "table_arn" {
+  value = aws_dynamodb_table.this.arn
+}

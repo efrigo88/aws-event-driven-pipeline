@@ -6,7 +6,6 @@ import json
 def lambda_handler(event, context):
     sqs = boto3.client("sqs")
     ec2 = boto3.client("ec2")
-    aws_region = os.environ["AWS_DEFAULT_REGION"]
     queue_url = os.environ["SQS_QUEUE_URL"]
     dynamodb_table_name = os.environ["DYNAMODB_TABLE_NAME"]
     tag_key = os.environ["EC2_TAG_KEY"]
@@ -17,6 +16,8 @@ def lambda_handler(event, context):
     subnet_id = os.environ["EC2_SUBNET_ID"]
     security_group_id = os.environ["EC2_SECURITY_GROUP_ID"]
     s3_bucket_name = os.environ["S3_BUCKET_NAME"]
+    key_name = os.environ["EC2_KEY_NAME"]
+    instance_profile_name = os.environ["EC2_INSTANCE_PROFILE_NAME"]
 
     # Receive one message from SQS
     messages = sqs.receive_message(
@@ -28,14 +29,8 @@ def lambda_handler(event, context):
         return {"status": "no_messages"}
 
     message = messages[0]
-    message_body = message["Body"]
+    message_json = json.dumps(message)
     receipt_handle = message["ReceiptHandle"]
-    # Try to extract row id from message body
-    try:
-        body_json = json.loads(message_body)
-        row_id = body_json.get("id", "")
-    except json.JSONDecodeError:
-        row_id = message_body  # fallback: just pass the body
 
     # Check for running EC2 with the tag
     filters = [
@@ -48,20 +43,38 @@ def lambda_handler(event, context):
         print("EC2 already running. Exiting.")
         return {"status": "ec2_running"}
 
-    # Pass the row_id/message to EC2 via user data
+    # Pass the sqs object to EC2 via user data
     user_data = f"""#!/bin/bash
-exec > /var/log/user-data.log 2>&1
+exec > /home/ubuntu/user-data.log 2>&1
 set -x
-echo '{row_id}' > /tmp/sqs_row_id.txt
+cd /home/ubuntu
+
+# Install AWS CLI v2
+apt-get update
+apt-get install -y unzip curl jq
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+./aws/install
+export PATH=$PATH:/usr/local/bin
+
+echo '{message_json}' > /home/ubuntu/sqs_message.json
+echo "Message: {message_json}"
+
+# Extract the row ID from the SQS message
+ROW_ID=$(jq -r '.Body | fromjson | .dynamodb.Keys.id.S' /home/ubuntu/sqs_message.json)
+echo "Extracted row ID: $ROW_ID"
+
+# Now you can use $ROW_ID in your DynamoDB update
 aws dynamodb update-item \
-    --table-name  {dynamodb_table_name} \
-    --key '{{\"id\":{{\"S\":\"{row_id}\"}}}}' \
+    --table-name {dynamodb_table_name} \
+    --key "{{\\"id\\":{{\\"S\\":\\"$ROW_ID\\"}}}}" \
     --update-expression 'SET #s = :s' \
-    --expression-attribute-names '{{\"#s\":\"status\"}}' \
-    --expression-attribute-values '{{\":s\":{{\"S\":\"FINISHED\"}}}}' \
-    --region {aws_region}
+    --expression-attribute-names '{{"#s":"status"}}' \\
+    --expression-attribute-values '{{":s":{{"S":"FINISHED"}}}}'
+echo "DynamoDB update completed"
+
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-aws s3 cp /var/log/user-data.log s3://{s3_bucket_name}/{row_id}/$TIMESTAMP/run.log
+aws s3 cp /home/ubuntu/user-data.log s3://{s3_bucket_name}/$TIMESTAMP/run.log
 shutdown -h +{auto_terminate}
 """
 
@@ -72,6 +85,8 @@ shutdown -h +{auto_terminate}
         MaxCount=1,
         SubnetId=subnet_id,
         SecurityGroupIds=[security_group_id],
+        KeyName=key_name,
+        IamInstanceProfile={"Name": instance_profile_name},
         TagSpecifications=[
             {
                 "ResourceType": "instance",
@@ -92,5 +107,4 @@ shutdown -h +{auto_terminate}
     return {
         "status": "ec2_launched",
         "instance_id": resp["Instances"][0]["InstanceId"],
-        "row_id": row_id,
     }

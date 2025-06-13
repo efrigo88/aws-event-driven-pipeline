@@ -1,8 +1,3 @@
-variable "aws_region" {
-  description = "AWS region."
-  type        = string
-}
-
 variable "sqs_queue_arn" {
   description = "ARN of the SQS queue."
   type        = string
@@ -47,5 +42,20 @@ variable "ec2_security_group_id" {
 
 variable "s3_bucket_name" {
   description = "S3 bucket name for EC2 log uploads."
+  type        = string
+}
+
+variable "ec2_key_name" {
+  description = "EC2 key pair name for SSH access."
+  type        = string
+}
+
+variable "ec2_instance_profile_name" {
+  description = "EC2 instance profile name for IAM role attachment."
+  type        = string
+}
+
+variable "project_name" {
+  description = "Project name for resource naming."
   type        = string
 }
