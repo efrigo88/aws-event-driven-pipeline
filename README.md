@@ -7,23 +7,25 @@ This Terraform project provisions a fully isolated, event-driven pipeline for fi
 - **DynamoDB Table**: Stores file pointers and status, with a GSI on `status`.
 - **EventBridge Pipe**: Forwards new DynamoDB rows with `status = PENDING` to SQS.
 - **SQS Queue**: Buffers file pointers for processing.
-- **Lambda Orchestrator**: Triggered by EventBridge schedule (cron), checks SQS, launches EC2 if needed.
-- **EC2 Worker**: Receives the SQS message (row id) via user data, updates DynamoDB status to `FINISHED`, and auto-terminates.
+- **Lambda Orchestrator**: Triggered by EventBridge schedule (every minute), checks SQS for messages, launches EC2 if needed.
+- **EC2 Worker**: Downloads worker script from S3, processes SQS messages, updates DynamoDB status to `FINISHED`, and auto-terminates.
 
 ## Architecture Flow
 1. **PutItem** into DynamoDB with `status = PENDING`.
 2. **EventBridge Pipe** forwards to SQS if status is PENDING.
 3. **SQS** accumulates messages.
-4. **EventBridge Rule** triggers Lambda every 5 minutes (or work hours via cron).
+4. **EventBridge Rule** triggers Lambda every minute.
 5. **Lambda**:
-   - Receives a message from SQS (extracts row id)
-   - Checks for running EC2 with tag `Role=rag-worker`
-   - If none, launches EC2 (t3.micro) in the isolated VPC/subnet/SG, passing row id in user data
+   - Checks SQS for messages
+   - If no messages, exits without launching EC2
+   - If messages exist, checks for running EC2 with tag `Role=rag-worker`
+   - If none running, launches EC2 (t3.micro) in the isolated VPC/subnet/SG
 6. **EC2**:
-   - On boot, reads row id from user data
-   - Updates DynamoDB row to `status = FINISHED` using AWS CLI
-   - Auto-terminates after 5 minutes
-   - Instance is tagged with `Name=rag-worker-<row_id>` for easy identification
+   - On boot, downloads worker script from S3
+   - Sets up logging to `/home/ubuntu/sqs_worker.logs`
+   - Processes SQS messages
+   - Updates DynamoDB rows to `status = FINISHED`
+   - Auto-terminates after configurable idle period (default: 60 minutes)
 
 ## Terraform Structure
 ```
@@ -35,18 +37,23 @@ modules/
   dynamodb/      # DynamoDB table + GSI
   sqs/           # SQS queue
   eventbridge/   # EventBridge Pipe + IAM
-  ec2/           # AMI lookup
+  ec2/           # AMI lookup, key pair, IAM role
   lambda/        # Lambda function, IAM, env
   eventbridge_lambda/ # EventBridge rule to trigger Lambda
+  s3/            # S3 bucket for worker script and logs
 ```
 
 ## Environment Variables & Parameters
 - **Lambda** receives all required parameters as environment variables:
-  - `SQS_QUEUE_URL`, `DYNAMODB_TABLE_NAME`, `EC2_TAG_KEY`, `EC2_TAG_VALUE`, `EC2_AMI_ID`, `EC2_INSTANCE_TYPE`, `EC2_AUTOTERMINATE_MINUTES`, `EC2_SUBNET_ID`, `EC2_SECURITY_GROUP_ID`
+  - `SQS_QUEUE_URL`, `DYNAMODB_TABLE_NAME`, `EC2_TAG_KEY`, `EC2_TAG_VALUE`
+  - `EC2_AMI_ID`, `EC2_INSTANCE_TYPE`, `EC2_AUTOTERMINATE_MINUTES`
+  - `EC2_SUBNET_ID`, `EC2_SECURITY_GROUP_ID`, `S3_BUCKET_NAME`
+  - `EC2_KEY_NAME`, `EC2_INSTANCE_PROFILE_NAME`
 - **EC2** is launched with user data that:
-  - Receives the row id
-  - Updates DynamoDB status to `FINISHED`
-  - Shuts down after 5 minutes
+  - Downloads worker script from S3
+  - Sets up file-based logging
+  - Configures environment variables
+  - Runs the worker script
 
 ## Setup & Deployment
 1. **Configure AWS credentials/profile** as described earlier.
@@ -59,8 +66,6 @@ modules/
    terraform plan
    terraform apply
    ```
-4. **Lambda packaging:**
-   - Place your `lambda_function.py` in `modules/lambda/build/` (Terraform will zip it automatically).
 
 ## Testing the Flow
 1. **Add a row to DynamoDB:**
@@ -72,11 +77,15 @@ modules/
 2. **Observe:**
    - SQS receives the message
    - Lambda is triggered by EventBridge rule
-   - Lambda launches EC2 (if none running)
-   - EC2 instance is named `rag-worker-<row_id>` and updates DynamoDB
-   - EC2 auto-terminates after 5 minutes
+   - Lambda checks SQS and launches EC2 if needed
+   - EC2 downloads worker script from S3
+   - Worker processes messages and updates DynamoDB
+   - EC2 auto-terminates after idle timeout
 3. **Check DynamoDB:**
    - The row's status should be updated to `FINISHED`
+4. **Check Logs:**
+   - Worker logs are available at `/home/ubuntu/sqs_worker.logs` on the EC2 instance
+   - Lambda logs are available in CloudWatch Logs
 
 ## Notes & Best Practices
 - **VPC isolation** ensures your tests do not interfere with other resources.
@@ -85,14 +94,19 @@ modules/
 - **Security group** allows SSH for testing (restrict in production).
 - **All resources are tagged** for cost and environment tracking.
 - **No default VPC required**—all networking is managed by Terraform.
+- **File-based logging** for easy debugging and monitoring.
+- **Efficient resource usage** - EC2 only launched when there are messages to process.
 
 ## Troubleshooting
 - **No messages in SQS:** Ensure you are adding items to DynamoDB with `status = PENDING`.
 - **EC2 not launching:** Check Lambda logs for VPC/subnet/security group errors.
-- **DynamoDB not updated:** Ensure EC2 has IAM permissions and AWS CLI is available.
+- **DynamoDB not updated:** Ensure EC2 has IAM permissions and check worker logs.
+- **Worker script not found:** Verify S3 bucket permissions and script upload.
 - **Resource cleanup:** All resources are managed by Terraform and can be destroyed with `terraform destroy`.
 
 ## Next Steps
-- Add more sophisticated EC2 worker logic (e.g., process files, handle errors, delete SQS messages after processing).
-- Add monitoring/alerts for failed Lambda or EC2 runs.
+- Add CloudWatch alarms for failed Lambda or EC2 runs.
+- Implement more sophisticated error handling and retries.
+- Add monitoring for SQS queue depth and processing times.
 - Restrict security group rules for production.
+- Consider implementing dead-letter queues for failed messages.
