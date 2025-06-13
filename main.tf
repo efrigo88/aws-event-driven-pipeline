@@ -28,6 +28,7 @@ module "s3" {
 
 module "lambda" {
   source                    = "./modules/lambda"
+  aws_region                = var.aws_region
   sqs_queue_arn             = module.sqs.queue_arn
   sqs_queue_url             = module.sqs.queue_url
   dynamodb_table_name       = module.dynamodb.table_name

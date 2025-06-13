@@ -6,6 +6,7 @@ import json
 def lambda_handler(event, context):
     sqs = boto3.client("sqs")
     ec2 = boto3.client("ec2")
+    aws_region = os.environ["AWS_DEFAULT_REGION"]
     queue_url = os.environ["SQS_QUEUE_URL"]
     dynamodb_table_name = os.environ["DYNAMODB_TABLE_NAME"]
     tag_key = os.environ["EC2_TAG_KEY"]
@@ -58,7 +59,7 @@ aws dynamodb update-item \
     --update-expression 'SET #s = :s' \
     --expression-attribute-names '{{\"#s\":\"status\"}}' \
     --expression-attribute-values '{{\":s\":{{\"S\":\"FINISHED\"}}}}' \
-    --region {os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}
+    --region {aws_region}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 aws s3 cp /var/log/user-data.log s3://{s3_bucket_name}/{row_id}/$TIMESTAMP/run.log
 shutdown -h +{auto_terminate}

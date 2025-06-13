@@ -15,6 +15,7 @@ resource "aws_lambda_function" "rag_launcher" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   environment {
     variables = {
+      AWS_DEFAULT_REGION        = var.aws_region
       SQS_QUEUE_URL             = var.sqs_queue_url
       DYNAMODB_TABLE_NAME       = var.dynamodb_table_name
       EC2_TAG_KEY               = "Role"

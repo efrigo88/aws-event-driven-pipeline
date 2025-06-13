@@ -1,3 +1,8 @@
+variable "aws_region" {
+  description = "AWS region."
+  type        = string
+}
+
 variable "sqs_queue_arn" {
   description = "ARN of the SQS queue."
   type        = string
