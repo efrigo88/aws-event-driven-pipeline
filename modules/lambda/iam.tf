@@ -42,3 +42,18 @@ resource "aws_iam_role_policy" "lambda_policy" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "ec2_logs_to_s3" {
+  name = "ec2-logs-to-s3-policy"
+  role = aws_iam_role.lambda_exec.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["s3:PutObject"],
+        Resource = ["arn:aws:s3:::${var.s3_bucket_name}/*"]
+      }
+    ]
+  })
+}

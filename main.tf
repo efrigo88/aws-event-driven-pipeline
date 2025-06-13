@@ -21,6 +21,11 @@ module "ec2" {
   source = "./modules/ec2"
 }
 
+module "s3" {
+  source       = "./modules/s3"
+  project_name = var.project_name
+}
+
 module "lambda" {
   source                    = "./modules/lambda"
   sqs_queue_arn             = module.sqs.queue_arn
@@ -31,6 +36,7 @@ module "lambda" {
   ec2_subnet_id             = module.vpc.subnet_id
   ec2_security_group_id     = module.vpc.security_group_id
   dynamodb_table_name       = module.dynamodb.table_name
+  s3_bucket_name            = module.s3.bucket_name
 }
 
 module "eventbridge_lambda" {

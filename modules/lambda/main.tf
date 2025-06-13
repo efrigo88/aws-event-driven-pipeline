@@ -24,6 +24,7 @@ resource "aws_lambda_function" "rag_launcher" {
       EC2_AUTOTERMINATE_MINUTES = var.ec2_autoterminate_minutes
       EC2_SUBNET_ID             = var.ec2_subnet_id
       EC2_SECURITY_GROUP_ID     = var.ec2_security_group_id
+      S3_BUCKET_NAME            = var.s3_bucket_name
     }
   }
 }

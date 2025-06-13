@@ -39,3 +39,8 @@ variable "ec2_security_group_id" {
   description = "Security group ID for EC2 instance."
   type        = string
 }
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name for EC2 log uploads."
+  type        = string
+}

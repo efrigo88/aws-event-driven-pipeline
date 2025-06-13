@@ -15,6 +15,7 @@ def lambda_handler(event, context):
     auto_terminate = int(os.environ["EC2_AUTOTERMINATE_MINUTES"])
     subnet_id = os.environ["EC2_SUBNET_ID"]
     security_group_id = os.environ["EC2_SECURITY_GROUP_ID"]
+    s3_bucket_name = os.environ["S3_BUCKET_NAME"]
 
     # Receive one message from SQS
     messages = sqs.receive_message(
@@ -27,6 +28,7 @@ def lambda_handler(event, context):
 
     message = messages[0]
     message_body = message["Body"]
+    receipt_handle = message["ReceiptHandle"]
     # Try to extract row id from message body
     try:
         body_json = json.loads(message_body)
@@ -47,14 +49,18 @@ def lambda_handler(event, context):
 
     # Pass the row_id/message to EC2 via user data
     user_data = f"""#!/bin/bash
+exec > /var/log/user-data.log 2>&1
+set -x
 echo '{row_id}' > /tmp/sqs_row_id.txt
 aws dynamodb update-item \
     --table-name  {dynamodb_table_name} \
-    --key '{{"id":{{"S":"{row_id}"}}}}' \
+    --key '{{\"id\":{{\"S\":\"{row_id}\"}}}}' \
     --update-expression 'SET #s = :s' \
-    --expression-attribute-names '{{"#s":"status"}}' \
-    --expression-attribute-values '{{":s":{{"S":"FINISHED"}}}}' \
+    --expression-attribute-names '{{\"#s\":\"status\"}}' \
+    --expression-attribute-values '{{\":s\":{{\"S\":\"FINISHED\"}}}}' \
     --region {os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+aws s3 cp /var/log/user-data.log s3://{s3_bucket_name}/{row_id}/$TIMESTAMP/run.log
 shutdown -h +{auto_terminate}
 """
 
@@ -77,6 +83,11 @@ shutdown -h +{auto_terminate}
         UserData=user_data,
     )
     print("Launched EC2:", resp["Instances"][0]["InstanceId"])
+
+    # Delete the SQS message after EC2 is successfully launched
+    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+    print("Deleted SQS message with receipt handle:", receipt_handle)
+
     return {
         "status": "ec2_launched",
         "instance_id": resp["Instances"][0]["InstanceId"],
