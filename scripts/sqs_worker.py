@@ -1,3 +1,5 @@
+"""Process SQS messages and manage S3 file operations."""
+
 import os
 import time
 import json
