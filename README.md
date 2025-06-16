@@ -11,7 +11,7 @@ This Terraform project provisions a fully isolated, event-driven pipeline for fi
 - **EC2 Worker**: Downloads worker script from S3, processes SQS messages, updates DynamoDB status to `FINISHED`, and auto-terminates.
 
 ## Architecture Flow
-1. **PutItem** into DynamoDB with `status = PENDING`.
+1. **PutItem** into DynamoDB with `status = PENDING` and `s3_path` pointing to input file.
 2. **EventBridge Pipe** forwards to SQS if status is PENDING.
 3. **SQS** accumulates messages.
 4. **EventBridge Rule** triggers Lambda every minute.
@@ -23,9 +23,11 @@ This Terraform project provisions a fully isolated, event-driven pipeline for fi
 6. **EC2**:
    - On boot, downloads worker script from S3
    - Sets up logging to `/home/ubuntu/sqs_worker.logs`
-   - Processes SQS messages
-   - Updates DynamoDB rows to `status = FINISHED`
-   - Auto-terminates after configurable idle period (default: 60 minutes)
+   - Processes SQS messages:
+     - Gets S3 path from DynamoDB
+     - Copies file from input to output path
+     - Updates DynamoDB status to `FINISHED`
+   - Auto-terminates after configurable idle period (default: 5 minutes)
 
 ## Terraform Structure
 ```
@@ -72,7 +74,11 @@ modules/
    ```sh
    aws dynamodb put-item \
      --table-name <TABLE_NAME> \
-     --item '{"id": {"S": "test1"}, "status": {"S": "PENDING"}}'
+     --item '{
+       "id": {"S": "test1"},
+       "status": {"S": "PENDING"},
+       "s3_path": {"S": "s3://your-bucket/data/input/client_1/test_file_1.txt"}
+     }'
    ```
 2. **Observe:**
    - SQS receives the message
@@ -83,7 +89,10 @@ modules/
    - EC2 auto-terminates after idle timeout
 3. **Check DynamoDB:**
    - The row's status should be updated to `FINISHED`
-4. **Check Logs:**
+4. **Check S3:**
+   - Input file should be copied to output path
+   - Output path should be: `s3://your-bucket/data/output/client_1/test_file_1.txt`
+5. **Check Logs:**
    - Worker logs are available at `/home/ubuntu/sqs_worker.logs` on the EC2 instance
    - Lambda logs are available in CloudWatch Logs
 
@@ -96,12 +105,14 @@ modules/
 - **No default VPC required**—all networking is managed by Terraform.
 - **File-based logging** for easy debugging and monitoring.
 - **Efficient resource usage** - EC2 only launched when there are messages to process.
+- **Robust error handling** in worker script for S3 operations and path parsing.
 
 ## Troubleshooting
 - **No messages in SQS:** Ensure you are adding items to DynamoDB with `status = PENDING`.
 - **EC2 not launching:** Check Lambda logs for VPC/subnet/security group errors.
 - **DynamoDB not updated:** Ensure EC2 has IAM permissions and check worker logs.
 - **Worker script not found:** Verify S3 bucket permissions and script upload.
+- **S3 copy fails:** Check IAM permissions and verify S3 paths in DynamoDB.
 - **Resource cleanup:** All resources are managed by Terraform and can be destroyed with `terraform destroy`.
 
 ## Next Steps
@@ -110,3 +121,4 @@ modules/
 - Add monitoring for SQS queue depth and processing times.
 - Restrict security group rules for production.
 - Consider implementing dead-letter queues for failed messages.
+- Add S3 event notifications for file processing status.
