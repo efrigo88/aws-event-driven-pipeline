@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "project_name" {
-  description = "Project name for resource naming"
+  description = "Name of the project"
   type        = string
   default     = "aws-event-driven-pipeline"
 }
@@ -17,13 +17,19 @@ variable "environment" {
 }
 
 variable "worker_instance_type" {
-  description = "EC2 instance type for worker."
+  description = "EC2 instance type for the worker"
   type        = string
   default     = "t3.micro"
 }
 
 variable "worker_autoterminate_minutes" {
-  description = "Minutes after which worker EC2 should auto-terminate."
+  description = "Number of minutes of idle time before EC2 instance terminates"
   type        = number
-  default     = 3
+  default     = 5
+}
+
+variable "eventbridge_schedule_expression" {
+  description = "Schedule expression for the EventBridge rule"
+  type        = string
+  default     = "rate(1 minute)"
 }

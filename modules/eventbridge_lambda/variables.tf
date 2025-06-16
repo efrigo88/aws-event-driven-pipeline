@@ -7,3 +7,8 @@ variable "lambda_function_arn" {
   description = "ARN of the Lambda function to trigger."
   type        = string
 }
+
+variable "schedule_expression" {
+  description = "Schedule expression for the EventBridge rule."
+  type        = string
+}

@@ -48,6 +48,7 @@ module "lambda" {
 
 module "eventbridge_lambda" {
   source               = "./modules/eventbridge_lambda"
+  schedule_expression  = var.eventbridge_schedule_expression
   lambda_function_name = module.lambda.lambda_function_name
   lambda_function_arn  = module.lambda.lambda_function_arn
 }

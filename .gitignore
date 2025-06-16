@@ -165,7 +165,6 @@ myplan
 outputs/
 
 # Ignore sensitive data folder
-data/
 RAG/data/
 *declaration.md
 *declaracion.md
