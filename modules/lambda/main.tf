@@ -16,7 +16,8 @@ resource "aws_lambda_function" "rag_launcher" {
   environment {
     variables = {
       SQS_QUEUE_URL             = var.sqs_queue_url
-      DYNAMODB_TABLE_NAME       = var.dynamodb_table_name
+      DYNAMODB_TABLE            = var.dynamodb_table
+      REGION                    = var.region
       EC2_TAG_KEY               = "Role"
       EC2_TAG_VALUE             = "rag-worker"
       EC2_AMI_ID                = var.ec2_ami_id

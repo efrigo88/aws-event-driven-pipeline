@@ -1,5 +1,6 @@
 resource "aws_sqs_queue" "this" {
-  name = var.sqs_queue_name
+  name                       = var.sqs_queue_name
+  visibility_timeout_seconds = 3600
 }
 
 output "queue_url" {

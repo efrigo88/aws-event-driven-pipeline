@@ -1,23 +1,31 @@
 """Process SQS messages and manage S3 file operations."""
 
-import os
-import time
 import json
 import logging
+import os
+import time
+from datetime import datetime
+
 import boto3
 from botocore.exceptions import ClientError
 
 QUEUE_URL = os.environ["SQS_QUEUE_URL"]
-DYNAMODB_TABLE = os.environ["DYNAMODB_TABLE_NAME"]
-IDLE_MINUTES = int(os.environ.get("EC2_AUTOTERMINATE_MINUTES", 60))
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+DYNAMODB_TABLE = os.environ["DYNAMODB_TABLE"]
+IDLE_MINUTES = int(os.environ["EC2_AUTOTERMINATE_MINUTES"])
+REGION = os.environ["REGION"]
+S3_BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
+LOG_FILE = "/home/ubuntu/sqs_worker.logs"
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    filename="/home/ubuntu/sqs_worker.logs",
+    filename=LOG_FILE,
 )
 logger = logging.getLogger(__name__)
+
+s3 = boto3.client("s3", region_name=REGION)
+dynamodb = boto3.client("dynamodb", region_name=REGION)
+sqs = boto3.client("sqs", region_name=REGION)
 
 
 def copy_s3_file(source_path, destination_path):
@@ -37,7 +45,6 @@ def copy_s3_file(source_path, destination_path):
         logger.info("Destination bucket: %s, key: %s", dest_bucket, dest_key)
 
         # Get the object from source
-        s3 = boto3.client("s3", region_name=AWS_REGION)
         try:
             response = s3.get_object(Bucket=source_bucket, Key=source_key)
             logger.info("Successfully retrieved source file")
@@ -53,9 +60,7 @@ def copy_s3_file(source_path, destination_path):
                 Key=dest_key,
                 Body=response["Body"].read()
             )
-            logger.info(
-                "Successfully copied %s to %s", source_path, destination_path
-            )
+            logger.info("Successfully copied to destination")
             return True
         except ClientError as e:
             logger.error("Error uploading to destination: %s", str(e))
@@ -81,7 +86,6 @@ def process_message(msg):
         logger.info("Processing row_id: %s", row_id)
 
         # Get the S3 path from DynamoDB
-        dynamodb = boto3.client("dynamodb", region_name=AWS_REGION)
         response = dynamodb.get_item(
             TableName=DYNAMODB_TABLE, Key={"id": {"S": row_id}}
         )
@@ -124,7 +128,6 @@ def process_message(msg):
 
 def main():
     """Main function to poll SQS and process messages."""
-    sqs = boto3.client("sqs", region_name=AWS_REGION)
     idle_seconds = 0
     while idle_seconds < IDLE_MINUTES * 60:
         resp = sqs.receive_message(
@@ -137,10 +140,21 @@ def main():
                 sqs.delete_message(
                     QueueUrl=QUEUE_URL, ReceiptHandle=msg["ReceiptHandle"]
                 )
+                logger.info("Deleted message from SQS")
             idle_seconds = 0  # Reset idle timer after processing
         else:
             idle_seconds += 10
         time.sleep(1)
+
+    # Upload logs to S3 before shutdown
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_key = f"logs/{timestamp}/run.log"
+    try:
+        s3.upload_file(LOG_FILE, S3_BUCKET_NAME, log_key)
+        logger.info("Uploaded logs to s3://%s/%s", S3_BUCKET_NAME, log_key)
+    except (ClientError, IOError) as e:
+        logger.error("Failed to upload logs to S3: %s", e)
+
     logger.info("Idle timeout reached, shutting down.")
     os.system("sudo shutdown -P now")
 

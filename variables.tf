@@ -25,7 +25,7 @@ variable "worker_instance_type" {
 variable "worker_autoterminate_minutes" {
   description = "Number of minutes of idle time before EC2 instance terminates"
   type        = number
-  default     = 5
+  default     = 3
 }
 
 variable "eventbridge_schedule_expression" {

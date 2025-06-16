@@ -19,10 +19,11 @@ aws s3 cp s3://${S3_BUCKET_NAME}/sqs_worker.py /home/ubuntu/sqs_worker.py
 chmod +x /home/ubuntu/sqs_worker.py
 
 # Set environment variables for the worker
+export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
 export SQS_QUEUE_URL="${SQS_QUEUE_URL}"
-export DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME}"
+export DYNAMODB_TABLE="${DYNAMODB_TABLE}"
 export EC2_AUTOTERMINATE_MINUTES="${AUTO_TERMINATE}"
-export AWS_REGION="${AWS_REGION:-us-east-1}"
+export REGION="${REGION}"
 
 # Run the worker
 python3 /home/ubuntu/sqs_worker.py

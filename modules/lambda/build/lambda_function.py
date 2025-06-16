@@ -6,12 +6,16 @@ def lambda_handler(event, context):
     """Check for running EC2 instances and launch a new one if needed."""
     sqs = boto3.client("sqs")
     ec2 = boto3.client("ec2")
-    queue_url = os.environ["SQS_QUEUE_URL"]
+
+    # Get environment variables
+    region = os.environ["REGION"]
+    sqs_queue_url = os.environ["SQS_QUEUE_URL"]
+    dynamodb_table = os.environ["DYNAMODB_TABLE"]
     tag_key = os.environ["EC2_TAG_KEY"]
     tag_value = os.environ["EC2_TAG_VALUE"]
     ami_id = os.environ["EC2_AMI_ID"]
     instance_type = os.environ["EC2_INSTANCE_TYPE"]
-    auto_terminate = int(os.environ["EC2_AUTOTERMINATE_MINUTES"])
+    auto_terminate = os.environ["EC2_AUTOTERMINATE_MINUTES"]
     subnet_id = os.environ["EC2_SUBNET_ID"]
     security_group_id = os.environ["EC2_SECURITY_GROUP_ID"]
     s3_bucket_name = os.environ["S3_BUCKET_NAME"]
@@ -20,9 +24,10 @@ def lambda_handler(event, context):
 
     # Check for messages in SQS
     messages = sqs.receive_message(
-        QueueUrl=queue_url,
+        QueueUrl=sqs_queue_url,
         MaxNumberOfMessages=1,
-        WaitTimeSeconds=0
+        WaitTimeSeconds=0,
+        VisibilityTimeout=0  # Makes message visible again right after receive
     ).get("Messages", [])
 
     if not messages:
@@ -44,12 +49,14 @@ def lambda_handler(event, context):
     with open("/var/task/ec2_bootstrap.sh", "r", encoding="utf-8") as f:
         script_template = f.read()
 
+    # Replace the variables in the script template
     user_data = (
         script_template
+        .replace("${REGION}", region)
         .replace("${S3_BUCKET_NAME}", s3_bucket_name)
-        .replace("${AUTO_TERMINATE}", str(auto_terminate))
-        .replace("${SQS_QUEUE_URL}", os.environ["SQS_QUEUE_URL"])
-        .replace("${DYNAMODB_TABLE_NAME}", os.environ["DYNAMODB_TABLE_NAME"])
+        .replace("${AUTO_TERMINATE}", auto_terminate)
+        .replace("${SQS_QUEUE_URL}", sqs_queue_url)
+        .replace("${DYNAMODB_TABLE}", dynamodb_table)
     )
 
     resp = ec2.run_instances(
